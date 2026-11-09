@@ -1,7 +1,7 @@
 resources:
   pipelines:
-    ingestao_bronze:
-      name: grid_intelligence_bronze
+    grid_intelligence_etl:
+      name: grid_intelligence_etl
       catalog: ${var.catalog}
       schema: ${resources.schemas.bronze.name}
       serverless: true
@@ -9,7 +9,12 @@ resources:
       configuration:
         catalogo: ${var.catalog}
         schema_bronze: ${resources.schemas.bronze.name}
+        schema_silver: ${resources.schemas.silver.name}
+        schema_gold: ${resources.schemas.gold.name}
         volume_landing: /Volumes/${var.catalog}/raw/landing
+        duracao_minima_interrupcao_min: ${var.duracao_minima_interrupcao_min}
+        limiar_queda_uc: ${var.limiar_queda_uc}
+        faixa_estabilidade_conjunto: ${var.faixa_estabilidade_conjunto}
       libraries:
         - glob:
-            include: ../src/pipelines/grid_intelligence/transformations/01_bronze.sql
+            include: ../src/pipelines/grid_intelligence/transformations/**

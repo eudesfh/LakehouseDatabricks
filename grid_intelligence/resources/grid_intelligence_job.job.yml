@@ -1,0 +1,29 @@
+resources:
+  jobs:
+    grid_intelligence_job:
+      name: grid_intelligence_job
+      tasks:
+        - task_key: pipeline_etl
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.grid_intelligence_etl.id}
+            full_refresh: false
+
+        - task_key: metric_view_continuidade
+          depends_on:
+            - task_key: pipeline_etl
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/sql/metric_view_continuidade.sql
+            parameters:
+              catalogo: ${var.catalog}
+
+        - task_key: governanca_dado_pessoal
+          depends_on:
+            - task_key: pipeline_etl
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/sql/governanca_dado_pessoal.sql
+            parameters:
+              catalogo: ${var.catalog}

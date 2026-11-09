@@ -2,8 +2,8 @@ bundle:
   name: grid_intelligence
   uuid: f35daf39-c1f8-47a7-8ffc-7297ed946afa
 
-# Sem este flag, mode: development prefixa schemas com o nome do usuário.
-# O isolamento entre ambientes é feito pelo catálogo, não pelo nome do schema.
+# Sem este flag, mode: development prefixa schemas com o nome do usuario.
+# O isolamento entre ambientes e feito pelo catalogo, nao pelo nome do schema.
 experimental:
   skip_name_prefix_for_schema: true
 
@@ -13,6 +13,19 @@ include:
 variables:
   catalog:
     description: Catalogo Unity Catalog do ambiente (grid_dev ou grid_intelligence)
+  duracao_minima_interrupcao_min:
+    description: Limiar de duracao em minutos para RN-01 (interrupções validas para DEC/FEC)
+    default: "3"
+  limiar_queda_uc:
+    description: Queda percentual no consumo da UC para classificar como candidata (RN-06)
+    default: "20"
+  faixa_estabilidade_conjunto:
+    description: Variacao percentual maxima do conjunto para considera-lo estavel (RN-06)
+    default: "10"
+  warehouse_id:
+    description: ID do SQL Warehouse para tasks SQL do job
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
 
 targets:
   dev:
