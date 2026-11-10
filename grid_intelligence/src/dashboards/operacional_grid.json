@@ -1,0 +1,671 @@
+{
+  "datasets": [
+    {
+      "name": "ds_painel_30d",
+      "displayName": "Painel — últimos 30 dias",
+      "queryLines": [
+        "SELECT data, ",
+        "  SUM(uc_horas_interrompidas) AS horas_uc, ",
+        "  SUM(qtd_chamados)           AS chamados, ",
+        "  SUM(chamados_risco_saude)   AS chamados_saude, ",
+        "  SUM(qtd_interrupcoes)       AS interrupcoes ",
+        "FROM painel_operacional_dia ",
+        "WHERE data >= (SELECT date_sub(MAX(data), 30) FROM painel_operacional_dia) ",
+        "GROUP BY data ",
+        "ORDER BY data"
+      ]
+    },
+    {
+      "name": "ds_dec",
+      "displayName": "DEC e FEC por conjunto (metric view)",
+      "queryLines": [
+        "SELECT Conjunto, ",
+        "  MEASURE(DEC) AS dec_horas, ",
+        "  MEASURE(FEC) AS fec_valor ",
+        "FROM continuidade_metricas ",
+        "GROUP BY Conjunto ",
+        "ORDER BY dec_horas DESC"
+      ]
+    },
+    {
+      "name": "ds_acoes",
+      "displayName": "Ações do dia por conjunto",
+      "queryLines": [
+        "SELECT nome_conjunto, municipio, acao_recomendada, ",
+        "  ucs_prioridade_alta, ucs_prioridade_media ",
+        "FROM painel_operacional_dia ",
+        "WHERE data = (SELECT MAX(data) FROM painel_operacional_dia) ",
+        "ORDER BY ucs_prioridade_alta DESC, ucs_prioridade_media DESC"
+      ]
+    },
+    {
+      "name": "ds_prioridade",
+      "displayName": "Prioridade de inspeção por UC",
+      "queryLines": [
+        "WITH top9 AS ( ",
+        "  SELECT bairro FROM prioridade_inspecao_uc ",
+        "  GROUP BY bairro ORDER BY COUNT(*) DESC LIMIT 9 ",
+        ") ",
+        "SELECT id_uc, nome_conjunto, bairro, prioridade_inspecao, ",
+        "  motivo_observado, variacao_da_uc, classe_consumo, ",
+        "  CASE WHEN bairro IN (SELECT bairro FROM top9) ",
+        "    THEN bairro ELSE 'Outros bairros' END AS bairro_agrupado ",
+        "FROM prioridade_inspecao_uc ",
+        "ORDER BY CASE WHEN prioridade_inspecao = 'alta' THEN 1 ELSE 2 END, bairro"
+      ]
+    },
+    {
+      "name": "ds_ouvidoria",
+      "displayName": "Clientes em risco de ouvidoria",
+      "queryLines": [
+        "SELECT id_cliente, nome_conjunto, bairro, risco_ouvidoria, ",
+        "  qtd_mencoes_ouvidoria, motivo_predominante, ultima_fala, ",
+        "  ultimo_chamado_em, qtd_chamados ",
+        "FROM saude_cliente ",
+        "WHERE risco_ouvidoria = 'alto' ",
+        "ORDER BY qtd_mencoes_ouvidoria DESC"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "operacao_dia",
+      "displayName": "Operação do dia",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "titulo_pg1",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Operação do Dia — Luz do Vale Distribuidora S.A.\n",
+                "\n",
+                "Situação consolidada dos **últimos 30 dias**. KPIs acumulados no período com sparkline diário. A série temporal cruza chamados e horas-UC interrompidas para identificar se picos de ligação coincidem com eventos de rede."
+              ]
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 12, "height": 2 }
+        },
+        {
+          "widget": {
+            "name": "kpi-horas-uc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "sum(horas_uc)", "expression": "SUM(`horas_uc`)" },
+                    { "name": "daily(data)",   "expression": "DATE_TRUNC(\"DAY\", `data`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(horas_uc)",
+                  "displayName": "Horas-UC",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": { "type": "max", "places": 1 },
+                    "abbreviation": "compact"
+                  },
+                  "formatTemplate": "{{ @formatted }} h·UC"
+                },
+                "period": { "fieldName": "daily(data)" }
+              },
+              "frame": { "showTitle": true, "title": "Horas-UC sem fornecimento" }
+            }
+          },
+          "position": { "x": 0, "y": 2, "width": 3, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "kpi-chamados",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "sum(chamados)", "expression": "SUM(`chamados`)" },
+                    { "name": "daily(data)",   "expression": "DATE_TRUNC(\"DAY\", `data`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(chamados)",
+                  "displayName": "Chamados",
+                  "format": {
+                    "type": "number",
+                    "abbreviation": "compact",
+                    "decimalPlaces": { "type": "max", "places": 0 }
+                  }
+                },
+                "period": { "fieldName": "daily(data)" }
+              },
+              "frame": { "showTitle": true, "title": "Chamados recebidos" }
+            }
+          },
+          "position": { "x": 3, "y": 2, "width": 3, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "kpi-saude",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "sum(chamados_saude)", "expression": "SUM(`chamados_saude`)" },
+                    { "name": "daily(data)",          "expression": "DATE_TRUNC(\"DAY\", `data`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(chamados_saude)",
+                  "displayName": "Risco saúde",
+                  "format": {
+                    "type": "number",
+                    "abbreviation": "compact",
+                    "decimalPlaces": { "type": "max", "places": 0 }
+                  }
+                },
+                "period": { "fieldName": "daily(data)" }
+              },
+              "frame": { "showTitle": true, "title": "Chamados com risco à saúde" }
+            }
+          },
+          "position": { "x": 6, "y": 2, "width": 3, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "kpi-inspecao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_prioridade",
+                  "fields": [
+                    { "name": "count(alta)", "expression": "COUNT(CASE WHEN `prioridade_inspecao` = 'alta' THEN 1 END)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(alta)",
+                  "displayName": "UCs alta prioridade",
+                  "format": {
+                    "type": "number",
+                    "decimalPlaces": { "type": "exact", "places": 0 }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "UCs — prioridade alta",
+                "showDescription": true,
+                "description": "Atende os dois eixos da RN-06: queda própria + vizinhança estável"
+              }
+            }
+          },
+          "position": { "x": 9, "y": 2, "width": 3, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "combo-chamados-horas",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "data",      "expression": "`data`" },
+                    { "name": "chamados",  "expression": "`chamados`" },
+                    { "name": "horas_uc",  "expression": "`horas_uc`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": { "fieldName": "data", "scale": { "type": "temporal" } },
+                "y": {
+                  "scale": { "type": "quantitative" },
+                  "primary": {
+                    "fields": [ { "fieldName": "chamados", "displayName": "Chamados" } ]
+                  },
+                  "secondary": {
+                    "fields": [ { "fieldName": "horas_uc", "displayName": "Horas-UC interrompidas" } ]
+                  }
+                },
+                "label": { "show": false }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Chamados vs. Horas-UC interrompidas — últimos 30 dias",
+                "showDescription": true,
+                "description": "Barras = chamados (eixo esquerdo)   Linha = horas-UC sem fornecimento (eixo direito). Picos coincidentes indicam que a cascata de rede chegou ao call center."
+              }
+            }
+          },
+          "position": { "x": 0, "y": 5, "width": 12, "height": 5 }
+        },
+        {
+          "widget": {
+            "name": "barra-dec-conjunto",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_dec",
+                  "fields": [
+                    { "name": "Conjunto",  "expression": "`Conjunto`" },
+                    { "name": "dec_horas", "expression": "`dec_horas`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [
+                    {
+                      "fieldName": "dec_horas",
+                      "displayName": "DEC acumulado (h/UC)"
+                    }
+                  ]
+                },
+                "y": {
+                  "fieldName": "Conjunto",
+                  "scale": { "type": "categorical" }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "DEC por conjunto — fonte: metric view",
+                "showDescription": true,
+                "description": "Duração Equivalente de Interrupção em horas por UC. Calculado via MEASURE() sobre a metric view continuidade_metricas — fórmula única conforme RN-04."
+              }
+            }
+          },
+          "position": { "x": 0, "y": 10, "width": 5, "height": 6 }
+        },
+        {
+          "widget": {
+            "name": "tabela-acoes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_acoes",
+                  "fields": [
+                    { "name": "nome_conjunto",      "expression": "`nome_conjunto`" },
+                    { "name": "municipio",           "expression": "`municipio`" },
+                    { "name": "acao_recomendada",    "expression": "`acao_recomendada`" },
+                    { "name": "ucs_prioridade_alta", "expression": "`ucs_prioridade_alta`" },
+                    { "name": "ucs_prioridade_media","expression": "`ucs_prioridade_media`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "nome_conjunto",       "displayName": "Conjunto" },
+                  { "fieldName": "municipio",            "displayName": "Município" },
+                  { "fieldName": "acao_recomendada",     "displayName": "Ação recomendada" },
+                  {
+                    "fieldName": "ucs_prioridade_alta",
+                    "displayName": "UCs — Alta",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": { "type": "data-value", "value": "1" },
+                            "operator": ">="
+                          },
+                          "backgroundColor": { "hex": "#E8614D" }
+                        }
+                      ]
+                    }
+                  },
+                  { "fieldName": "ucs_prioridade_media", "displayName": "UCs — Média" }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "O que precisa de ação hoje",
+                "showDescription": true,
+                "description": "Snapshot do último dia disponível no dataset. Ação derivada das regras de negócio RN-06/07 — ver página 2 para o detalhe por UC."
+              }
+            }
+          },
+          "position": { "x": 5, "y": 10, "width": 7, "height": 6 }
+        }
+      ]
+    },
+    {
+      "name": "perdas_clientes",
+      "displayName": "Perdas não técnicas e clientes",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "aviso-rn07",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Prioridade de inspeção — não é acusação (RN-07)\n",
+                "\n",
+                "A classificação abaixo é gerada por critérios **objetivos e reversíveis**: queda de consumo da UC contra seu próprio histórico, com vizinhança do conjunto estável no mesmo período. Uma queda de consumo também pode indicar **mudança de morador, imóvel desocupado ou defeito de medidor**. A diferença é jurídica — apenas a inspeção de campo confirma ou descarta cada situação. Nenhuma coluna desta página usa os termos fraude, furto ou culpado."
+              ]
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 12, "height": 3 }
+        },
+        {
+          "widget": {
+            "name": "barra-bairro-prioridade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_prioridade",
+                  "fields": [
+                    { "name": "bairro_agrupado",    "expression": "`bairro_agrupado`" },
+                    { "name": "prioridade_inspecao", "expression": "`prioridade_inspecao`" },
+                    { "name": "count(id_uc)",        "expression": "COUNT(`id_uc`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "scale": { "type": "quantitative" },
+                  "fields": [ { "fieldName": "count(id_uc)", "displayName": "UCs candidatas" } ]
+                },
+                "y": {
+                  "fieldName": "bairro_agrupado",
+                  "scale": { "type": "categorical" }
+                },
+                "color": {
+                  "fieldName": "prioridade_inspecao",
+                  "displayName": "Prioridade",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      { "value": "alta",  "color": "#E8614D" },
+                      { "value": "media", "color": "#F5C842" }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "UCs por bairro e prioridade de inspeção",
+                "showDescription": true,
+                "description": "Concentração num único bairro com conjunto estável é o padrão que a regra dos dois eixos (RN-06) procura. Top-9 bairros; demais agrupados em 'Outros bairros'."
+              }
+            }
+          },
+          "position": { "x": 0, "y": 3, "width": 5, "height": 8 }
+        },
+        {
+          "widget": {
+            "name": "tabela-prioridade-det",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_prioridade",
+                  "fields": [
+                    { "name": "id_uc",              "expression": "`id_uc`" },
+                    { "name": "bairro",             "expression": "`bairro`" },
+                    { "name": "prioridade_inspecao","expression": "`prioridade_inspecao`" },
+                    { "name": "motivo_observado",   "expression": "`motivo_observado`" },
+                    { "name": "variacao_da_uc",     "expression": "`variacao_da_uc`" },
+                    { "name": "classe_consumo",     "expression": "`classe_consumo`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "id_uc",   "displayName": "UC" },
+                  { "fieldName": "bairro",  "displayName": "Bairro" },
+                  {
+                    "fieldName": "prioridade_inspecao",
+                    "displayName": "Prioridade",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": { "type": "data-value", "value": "alta" },
+                            "operator": "="
+                          },
+                          "backgroundColor": { "hex": "#E8614D" }
+                        },
+                        {
+                          "condition": {
+                            "operand": { "type": "data-value", "value": "media" },
+                            "operator": "="
+                          },
+                          "backgroundColor": { "hex": "#F5C842" }
+                        }
+                      ]
+                    }
+                  },
+                  { "fieldName": "motivo_observado", "displayName": "Motivo observado" },
+                  {
+                    "fieldName": "variacao_da_uc",
+                    "displayName": "Variação (%)",
+                    "format": {
+                      "type": "number-plain",
+                      "decimalPlaces": { "type": "max", "places": 1 }
+                    }
+                  },
+                  { "fieldName": "classe_consumo", "displayName": "Classe" }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Detalhe da priorização por UC",
+                "showDescription": true,
+                "description": "Prioridade gerada por dois critérios objetivos. Alta = atende ambos os eixos + sinal de violação recente. Média = atende os eixos ou sinal isolado."
+              }
+            }
+          },
+          "position": { "x": 5, "y": 3, "width": 7, "height": 8 }
+        },
+        {
+          "widget": {
+            "name": "tabela-ouvidoria",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_ouvidoria",
+                  "fields": [
+                    { "name": "id_cliente",           "expression": "`id_cliente`" },
+                    { "name": "nome_conjunto",         "expression": "`nome_conjunto`" },
+                    { "name": "qtd_mencoes_ouvidoria", "expression": "`qtd_mencoes_ouvidoria`" },
+                    { "name": "qtd_chamados",          "expression": "`qtd_chamados`" },
+                    { "name": "motivo_predominante",   "expression": "`motivo_predominante`" },
+                    { "name": "ultima_fala",           "expression": "`ultima_fala`" },
+                    { "name": "ultimo_chamado_em",     "expression": "`ultimo_chamado_em`" }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  { "fieldName": "id_cliente",           "displayName": "Cliente" },
+                  { "fieldName": "nome_conjunto",         "displayName": "Conjunto" },
+                  {
+                    "fieldName": "qtd_mencoes_ouvidoria",
+                    "displayName": "Menções ouvidoria",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": { "type": "data-value", "value": "2" },
+                            "operator": ">="
+                          },
+                          "backgroundColor": { "hex": "#E8614D" }
+                        }
+                      ]
+                    }
+                  },
+                  { "fieldName": "qtd_chamados",        "displayName": "Total chamados" },
+                  { "fieldName": "motivo_predominante", "displayName": "Motivo principal" },
+                  { "fieldName": "ultima_fala",         "displayName": "Última fala (anonimizada)" },
+                  { "fieldName": "ultimo_chamado_em",   "displayName": "Último chamado" }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Clientes em rota de ouvidoria — risco alto",
+                "showDescription": true,
+                "description": "Texto proveniente de chamados processados pela camada silver. A identificação direta (nome, CPF, telefone) foi removida pela função de anonimização antes desta camada. 'Última fala' é a transcrição anonimizada do último atendimento."
+              }
+            }
+          },
+          "position": { "x": 0, "y": 11, "width": 12, "height": 7 }
+        }
+      ]
+    },
+    {
+      "name": "filtros",
+      "displayName": "Filtros",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "filtro-data",
+            "queries": [
+              {
+                "name": "ds_data",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "data", "expression": "`data`" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  { "fieldName": "data", "queryName": "ds_data" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Período" }
+            }
+          },
+          "position": { "x": 0, "y": 0, "width": 6, "height": 2 }
+        },
+        {
+          "widget": {
+            "name": "filtro-interrupcoes",
+            "queries": [
+              {
+                "name": "ds_interr",
+                "query": {
+                  "datasetName": "ds_painel_30d",
+                  "fields": [
+                    { "name": "min(interrupcoes)", "expression": "MIN(`interrupcoes`)" },
+                    { "name": "max(interrupcoes)", "expression": "MAX(`interrupcoes`)" }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "range-slider",
+              "encodings": {
+                "fields": [
+                  { "fieldName": "interrupcoes", "queryName": "ds_interr" }
+                ]
+              },
+              "frame": { "showTitle": true, "title": "Interrupções por dia" }
+            }
+          },
+          "position": { "x": 6, "y": 0, "width": 6, "height": 2 }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": { "light": "#F4F6FA", "dark": "#141D29" },
+      "widgetBackgroundColor": { "light": "#FFFFFF", "dark": "#1E2A38" },
+      "widgetBorderColor":     { "light": "#FFFFFF", "dark": "#1E2A38" },
+      "fontColor":             { "light": "#0F1A24", "dark": "#E8ECF0" },
+      "selectionColor":        { "light": "#3B9EDE", "dark": "#71C0F7" },
+      "visualizationColors": [
+        "#F59F45",
+        "#E8614D",
+        "#9B70C0",
+        "#3DB3A0",
+        "#4A8CC7",
+        "#2D5B8F",
+        "#68D47E"
+      ],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}
